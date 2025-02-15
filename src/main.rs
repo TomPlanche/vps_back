@@ -4,6 +4,7 @@ use rocket::{
     launch, routes,
     serde::json::{json, Json, Value},
 };
+use vps_back::ApiResponse;
 
 /// # CORS Configuration
 /// Implements CORS (Cross-Origin Resource Sharing) headers for the application.
@@ -45,7 +46,9 @@ impl Fairing for Cors {
 /// A static string greeting message
 #[rocket::get("/")]
 fn root() -> Json<Value> {
-    Json(json!({"message": "Hello, Rocket!"}))
+    ApiResponse::success(json!({
+        "message": "Hello, Rocket!"
+    }))
 }
 
 /// # `rocket`
