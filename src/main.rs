@@ -39,6 +39,10 @@ impl Fairing for Cors {
             "http://localhost:3000",
         ));
         response.set_header(Header::new(
+            "Access-Control-Allow-Origin",
+            "http://localhost:5173",
+        ));
+        response.set_header(Header::new(
             "Access-Control-Allow-Methods",
             "GET, POST, PUT, DELETE, OPTIONS",
         ));
