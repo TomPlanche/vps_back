@@ -1,5 +1,6 @@
 use rocket::{
     fairing::{Fairing, Info, Kind},
+    fs::FileServer,
     http::Header,
     launch, routes,
     serde::json::{json, Json, Value},
@@ -20,6 +21,14 @@ impl Fairing for Cors {
         }
     }
 
+    /// # `on_response`
+    /// Sets CORS headers for the response.
+    ///
+    /// Sets the following headers:
+    /// - Access-Control-Allow-Origin: http://localhost:3000 # port of the SvelteKit app
+    /// - Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS
+    /// - Access-Control-Allow-Headers: Content-Type
+    /// - Access-Control-Allow-Credentials: true
     async fn on_response<'r>(
         &self,
         _request: &'r rocket::Request<'_>,
@@ -59,5 +68,8 @@ fn root() -> Json<Value> {
 /// The configured Rocket instance
 #[launch]
 fn rocket() -> _ {
-    rocket::build().attach(Cors).mount("/", routes![root])
+    rocket::build()
+        .attach(Cors)
+        .mount("/", routes![root])
+        .mount("/static", FileServer::from("static"))
 }
