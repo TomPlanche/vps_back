@@ -1,7 +1,13 @@
 [package]
 name = "vps-back"
-version = "0.1.0"
-edition = "2021"
+version = "1.0.0"
+edition = "2024"
 
 [dependencies]
-rocket = { version = "0.5.1", features = ["json"] }
+axum = { version = "0.7", features = ["json"] }
+tokio = { version = "1.45", features = ["full"] }
+tower-http = { version = "0.5", features = ["cors", "fs", "trace"] }
+serde_json = "1.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+dotenvy = "0.15"
