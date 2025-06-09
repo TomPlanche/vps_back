@@ -60,7 +60,7 @@ impl Fairing for Cors {
 #[rocket::get("/")]
 fn root() -> Json<Value> {
     ApiResponse::success(json!({
-        "message": "Hello, Rocket!"
+        "message": "Hello, I'm Tom Planche!"
     }))
 }
 
