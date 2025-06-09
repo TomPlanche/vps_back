@@ -1,79 +1,75 @@
-use rocket::{
-    fairing::{Fairing, Info, Kind},
-    fs::FileServer,
-    http::Header,
-    launch, routes,
-    serde::json::{json, Json, Value},
+use axum::{
+    http::{HeaderValue, Method},
+    routing::get,
+    Json, Router,
 };
+use serde_json::{json, Value};
+use tower_http::{cors::CorsLayer, services::ServeDir, trace::TraceLayer};
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use vps_back::ApiResponse;
 
-/// # CORS Configuration
-/// Implements CORS (Cross-Origin Resource Sharing) headers for the application.
-/// Allows requests from localhost:5173 during development.
-pub struct Cors;
+#[tokio::main]
+async fn main() {
+    // Load .env file
+    dotenvy::dotenv().ok();
 
-#[rocket::async_trait]
-impl Fairing for Cors {
-    fn info(&self) -> Info {
-        Info {
-            name: "Cross-Origin-Resource-Sharing Fairing",
-            kind: Kind::Response,
-        }
+    // Initialize tracing
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::EnvFilter::new(
+            std::env::var("RUST_LOG").unwrap_or_else(|_| "info".into()),
+        ))
+        .with(tracing_subscriber::fmt::layer())
+        .init();
+
+    // Get configuration from environment
+    let host = std::env::var("HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
+    let port = std::env::var("PORT")
+        .unwrap_or_else(|_| "8000".to_string())
+        .parse::<u16>()
+        .expect("PORT must be a number");
+
+    // Configure CORS
+    let allowed_origins = std::env::var("ALLOWED_ORIGINS")
+        .unwrap_or_else(|_| "http://localhost:3000,http://localhost:5173".to_string())
+        .split(',')
+        .map(|origin| origin.trim().parse::<HeaderValue>().unwrap())
+        .collect::<Vec<_>>();
+
+    let mut cors = CorsLayer::new()
+        .allow_methods([
+            Method::GET,
+            Method::POST,
+            Method::PUT,
+            Method::DELETE,
+            Method::OPTIONS,
+        ])
+        .allow_headers([axum::http::header::CONTENT_TYPE])
+        .allow_credentials(true);
+
+    // Add each allowed origin to the CORS configuration
+    for origin in allowed_origins {
+        cors = cors.allow_origin(origin);
     }
 
-    /// # `on_response`
-    /// Sets CORS headers for the response.
-    ///
-    /// Sets the following headers:
-    /// - Access-Control-Allow-Origin: http://localhost:3000 # port of the SvelteKit app
-    /// - Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS
-    /// - Access-Control-Allow-Headers: Content-Type
-    /// - Access-Control-Allow-Credentials: true
-    async fn on_response<'r>(
-        &self,
-        _request: &'r rocket::Request<'_>,
-        response: &mut rocket::Response<'r>,
-    ) {
-        response.set_header(Header::new(
-            "Access-Control-Allow-Origin",
-            "http://localhost:3000",
-        ));
-        response.set_header(Header::new(
-            "Access-Control-Allow-Origin",
-            "http://localhost:5173",
-        ));
-        response.set_header(Header::new(
-            "Access-Control-Allow-Methods",
-            "GET, POST, PUT, DELETE, OPTIONS",
-        ));
-        response.set_header(Header::new("Access-Control-Allow-Headers", "Content-Type"));
-        response.set_header(Header::new("Access-Control-Allow-Credentials", "true"));
-    }
+    // Build our application with a route
+    let app = Router::new()
+        .route("/", get(root))
+        .nest_service("/static", ServeDir::new("static"))
+        .layer(cors)
+        .layer(TraceLayer::new_for_http());
+
+    // Run it
+    let addr = format!("{host}:{port}");
+    let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
+    tracing::info!("listening on {}", listener.local_addr().unwrap());
+    axum::serve(listener, app).await.unwrap();
 }
 
-/// # `root`
 /// Handles GET requests to the root path ("/").
 /// Serves as a simple health check endpoint.
-///
-/// ## Returns
-/// A static string greeting message
-#[rocket::get("/")]
-fn root() -> Json<Value> {
+async fn root() -> Json<Value> {
+    tracing::info!("`/` endpoint hit");
     ApiResponse::success(json!({
         "message": "Hello, I'm Tom Planche!"
     }))
-}
-
-/// # `rocket`
-/// Configures and launches the Rocket application.
-/// Sets up database connection, runs migrations, configures CORS, and mounts routes.
-///
-/// ## Returns
-/// The configured Rocket instance
-#[launch]
-fn rocket() -> _ {
-    rocket::build()
-        .attach(Cors)
-        .mount("/", routes![root])
-        .mount("/static", FileServer::from("static"))
 }
