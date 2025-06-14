@@ -99,8 +99,7 @@ pub async fn increment_source(
                     .unwrap_or(0);
 
             ApiResponse::success(json!({
-                "source": payload.source,
-                "count": count
+                payload.source: count
             }))
         }
         Err(e) => {
