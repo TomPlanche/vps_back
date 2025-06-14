@@ -2,13 +2,27 @@ use axum::{
     http::StatusCode,
     Json,
 };
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+
+pub mod db;
 
 /// Represents a standardized API response
 #[derive(Debug)]
 pub struct ApiResponse {
     pub status: StatusCode,
     pub json: Value,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SourceRequest {
+    pub source: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct SourceResponse {
+    pub source: String,
+    pub count: i64,
 }
 
 impl ApiResponse {
@@ -55,5 +69,10 @@ impl ApiResponse {
     /// Creates an internal server error response
     pub fn internal_error(message: &str) -> Json<Value> {
         Self::error(StatusCode::INTERNAL_SERVER_ERROR, message)
+    }
+
+    /// Creates an unauthorized error response
+    pub fn unauthorized(message: &str) -> Json<Value> {
+        Self::error(StatusCode::UNAUTHORIZED, message)
     }
 }
