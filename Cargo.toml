@@ -7,7 +7,10 @@ edition = "2024"
 axum = { version = "0.7", features = ["json"] }
 tokio = { version = "1.45", features = ["full"] }
 tower-http = { version = "0.5", features = ["cors", "fs", "trace"] }
+serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 dotenvy = "0.15"
+sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "sqlite", "chrono"] }
+axum-extra = { version = "0.9", features = ["typed-header"] }
