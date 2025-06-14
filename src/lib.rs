@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 pub mod db;
+pub mod source;
 
 /// Represents a standardized API response
 #[derive(Debug)]

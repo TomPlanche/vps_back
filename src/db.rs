@@ -20,7 +20,7 @@ pub async fn init_pool() -> Result<SqlitePool, sqlx::Error> {
 /// Increment the counter for a given source.
 ///
 /// # Arguments
-/// * `pool` - A reference to the SqlitePool for database operations.
+/// * `pool` - A reference to the `SqlitePool` for database operations.
 /// * `source` - The name of the source to increment.
 ///
 /// # Returns
