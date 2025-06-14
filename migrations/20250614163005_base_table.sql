@@ -5,12 +5,12 @@ CREATE TABLE IF NOT EXISTS sources
         PRIMARY
             KEY
         AUTOINCREMENT,
-    NAME
+    name
         TEXT
         NOT
             NULL
         UNIQUE,
-    COUNT
+    count
         INTEGER
         NOT
             NULL

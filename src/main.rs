@@ -1,16 +1,12 @@
 use axum::{
     Json, Router,
-    extract::State,
     http::{HeaderName, HeaderValue, Method},
     routing::{get, post},
 };
-use axum_extra::{TypedHeader, headers};
-use headers::Authorization;
 use serde_json::{Value, json};
-use sqlx::sqlite::SqlitePool;
 use tower_http::{cors::CorsLayer, services::ServeDir, trace::TraceLayer};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-use vps_back::{ApiResponse, SourceRequest, db};
+use vps_back::{ApiResponse, db, source};
 
 #[tokio::main]
 async fn main() {
@@ -71,7 +67,8 @@ async fn main() {
     // Build our application with a route
     let app = Router::new()
         .route("/", get(root))
-        .route("/source", post(source))
+        .route("/source", get(source::get_sources))
+        .route("/source", post(source::increment_source))
         .nest_service("/static", ServeDir::new("static"))
         .layer(cors)
         .layer(TraceLayer::new_for_http())
@@ -88,44 +85,8 @@ async fn main() {
 /// Serves as a simple health check endpoint.
 async fn root() -> Json<Value> {
     tracing::info!("GET `/` endpoint called");
+
     ApiResponse::success(json!({
         "message": "Hello, I'm Tom Planche!"
     }))
-}
-
-/// Handles POST requests to the source path ("/source").
-/// Increments a counter for the given source in the database.
-async fn source(
-    State(pool): State<SqlitePool>,
-    TypedHeader(api_key): TypedHeader<Authorization<headers::authorization::Bearer>>,
-    Json(payload): Json<SourceRequest>,
-) -> Json<Value> {
-    // Verify API key
-    let expected_api_key = std::env::var("API_KEY").expect("API_KEY must be set");
-    if api_key.token() != expected_api_key {
-        return ApiResponse::unauthorized("Invalid API key");
-    }
-
-    tracing::info!("POST `/source` endpoint called for: {}", payload.source);
-
-    // Increment the source counter
-    match db::increment_source(&pool, &payload.source).await {
-        Ok(()) => {
-            // Get the current count
-            let count =
-                sqlx::query_scalar!("SELECT count FROM sources WHERE name = ?", payload.source)
-                    .fetch_one(&pool)
-                    .await
-                    .unwrap_or(0);
-
-            ApiResponse::success(json!({
-                "source": payload.source,
-                "count": count
-            }))
-        }
-        Err(e) => {
-            tracing::error!("Database error: {}", e);
-            ApiResponse::internal_error("Failed to update source counter")
-        }
-    }
 }
