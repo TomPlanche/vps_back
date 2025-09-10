@@ -96,7 +96,7 @@ pub async fn increment_source(
                 sqlx::query_scalar!("SELECT count FROM sources WHERE name = ?", payload.source)
                     .fetch_one(&pool)
                     .await
-                    .unwrap_or(0);
+                    .unwrap_or(-1);
 
             ApiResponse::success(json!({
                 payload.source: count
