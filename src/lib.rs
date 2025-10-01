@@ -1,11 +1,10 @@
-use axum::{
-    http::StatusCode,
-    Json,
-};
+use axum::{Json, http::StatusCode};
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
+pub mod config;
 pub mod db;
+pub mod middleware;
 pub mod source;
 
 /// Represents a standardized API response

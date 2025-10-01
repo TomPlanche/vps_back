@@ -1,37 +1,42 @@
 use axum::{
     Json, Router,
     http::{HeaderName, HeaderValue, Method},
+    middleware,
     routing::{get, post},
 };
 use serde_json::{Value, json};
+use std::sync::Arc;
 use tower_http::{cors::CorsLayer, services::ServeDir, trace::TraceLayer};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-use vps_back::{ApiResponse, db, source};
+use vps_back::{
+    ApiResponse,
+    config::Config,
+    db,
+    middleware::{AppState, validate_api_key},
+    source,
+};
 
 #[tokio::main]
 async fn main() {
     // Load .env file
     dotenvy::dotenv().ok();
 
-    assert!(
-        std::env::var("API_KEY").is_ok(),
-        "API_KEY must be set in the environment variables"
-    );
+    // Load configuration - will exit if required env vars are missing
+    let config = Config::from_env().unwrap_or_else(|e| {
+        eprintln!("Configuration error: {e}");
+        std::process::exit(1);
+    });
+
+    // Create application state
+    let app_state = AppState {
+        api_key: Arc::new(config.api_key.clone()),
+    };
 
     // Initialize tracing
     tracing_subscriber::registry()
-        .with(tracing_subscriber::EnvFilter::new(
-            std::env::var("RUST_LOG").unwrap_or_else(|_| "info".into()),
-        ))
+        .with(tracing_subscriber::EnvFilter::new(&config.rust_log))
         .with(tracing_subscriber::fmt::layer())
         .init();
-
-    // Get configuration from environment
-    let host = std::env::var("HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
-    let port = std::env::var("PORT")
-        .unwrap_or_else(|_| "8000".to_string())
-        .parse::<u16>()
-        .expect("PORT must be a number");
 
     // Initialize database
     let pool = db::init_pool()
@@ -39,10 +44,14 @@ async fn main() {
         .expect("Failed to initialize database");
 
     // Configure CORS
-    let allowed_origins = std::env::var("ALLOWED_ORIGINS")
-        .unwrap_or_else(|_| "http://localhost:3000,http://localhost:5173".to_string())
-        .split(',')
-        .map(|origin| origin.trim().parse::<HeaderValue>().unwrap())
+    let allowed_origins = config
+        .allowed_origins
+        .iter()
+        .map(|origin| {
+            origin
+                .parse::<HeaderValue>()
+                .expect("Invalid origin in ALLOWED_ORIGINS")
+        })
         .collect::<Vec<_>>();
 
     let mut cors = CorsLayer::new()
@@ -67,15 +76,23 @@ async fn main() {
     // Build our application with a route
     let app = Router::new()
         .route("/", get(root))
-        .route("/source", get(source::get_sources))
-        .route("/source", post(source::increment_source))
         .nest_service("/static", ServeDir::new("static"))
+        .merge(
+            Router::new()
+                .route("/source", get(source::get_sources))
+                .route("/source", post(source::increment_source))
+                .layer(middleware::from_fn_with_state(
+                    app_state.clone(),
+                    validate_api_key,
+                ))
+                .with_state(pool.clone()),
+        )
         .layer(cors)
         .layer(TraceLayer::new_for_http())
         .with_state(pool);
 
     // Run it
-    let addr = format!("{host}:{port}");
+    let addr = format!("{}:{}", config.host, config.port);
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
     tracing::info!("listening on {}", listener.local_addr().unwrap());
     axum::serve(listener, app).await.unwrap();
