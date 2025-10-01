@@ -13,7 +13,7 @@ use vps_back::{
     config::Config,
     db,
     middleware::{AppState, validate_api_key},
-    source,
+    source, sticker,
 };
 
 #[tokio::main]
@@ -81,6 +81,9 @@ async fn main() {
             Router::new()
                 .route("/source", get(source::get_sources))
                 .route("/source", post(source::increment_source))
+                .route("/stickers", get(sticker::get_stickers))
+                .route("/stickers", post(sticker::create_sticker))
+                .route("/stickers/:id", get(sticker::get_sticker))
                 .layer(middleware::from_fn_with_state(
                     app_state.clone(),
                     validate_api_key,

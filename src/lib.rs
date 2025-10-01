@@ -6,6 +6,7 @@ pub mod config;
 pub mod db;
 pub mod middleware;
 pub mod source;
+pub mod sticker;
 
 /// Represents a standardized API response
 #[derive(Debug)]
@@ -23,6 +24,28 @@ pub struct SourceRequest {
 pub struct SourceResponse {
     pub source: String,
     pub count: i64,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct StickerRequest {
+    pub name: String,
+    pub latitude: f64,
+    pub longitude: f64,
+    pub place_name: String,
+    #[serde(default)]
+    pub pictures: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct StickerResponse {
+    pub id: i64,
+    pub name: String,
+    pub latitude: f64,
+    pub longitude: f64,
+    pub place_name: String,
+    pub pictures: Vec<String>,
+    pub created_at: String,
+    pub updated_at: String,
 }
 
 impl ApiResponse {
