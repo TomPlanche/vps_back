@@ -1,10 +1,12 @@
-use sqlx::postgres::PgPool;
+use sea_orm::{ActiveModelTrait, ColumnTrait, Database, DatabaseConnection, DbErr, EntityTrait, QueryFilter, Set};
 use tracing::info;
 
-/// Initialize the database pool.
+use crate::entities::{prelude::*, sources};
+
+/// Initialize the database connection.
 ///
 /// # Returns
-/// A `Result` containing the `PgPool` if successful, or an error if the initialization fails.
+/// A `Result` containing the `DatabaseConnection` if successful, or an error if the initialization fails.
 ///
 /// # Errors
 /// Returns an error if:
@@ -13,21 +15,21 @@ use tracing::info;
 ///
 /// # Panics
 /// Panics if the `DATABASE_URL` environment variable is not set.
-pub async fn init_pool() -> Result<PgPool, sqlx::Error> {
+pub async fn init_pool() -> Result<DatabaseConnection, DbErr> {
     let database_url = std::env::var("DATABASE_URL")
         .expect("DATABASE_URL must be set");
 
-    let pool = PgPool::connect(&database_url).await?;
+    let db = Database::connect(&database_url).await?;
 
-    info!("Database pool initialized");
+    info!("Database connection initialized");
 
-    Ok(pool)
+    Ok(db)
 }
 
 /// Increment the counter for a given source.
 ///
 /// # Arguments
-/// * `pool` - A reference to the `PgPool` for database operations.
+/// * `db` - A reference to the `DatabaseConnection` for database operations.
 /// * `source` - The name of the source to increment.
 ///
 /// # Returns
@@ -37,19 +39,27 @@ pub async fn init_pool() -> Result<PgPool, sqlx::Error> {
 /// Returns an error if:
 /// - Database query fails
 /// - Database transaction fails
-pub async fn increment_source(pool: &PgPool, source: &str) -> Result<(), sqlx::Error> {
-    sqlx::query(
-        r"
-        INSERT INTO sources (name, count)
-        VALUES ($1, 1)
-        ON CONFLICT(name) DO UPDATE SET
-            count = sources.count + 1,
-            updated_at = CURRENT_TIMESTAMP
-        ",
-    )
-    .bind(source)
-    .execute(pool)
-    .await?;
+pub async fn increment_source(db: &DatabaseConnection, source: &str) -> Result<(), DbErr> {
+    // Try to find existing source
+    let existing = Sources::find()
+        .filter(sources::Column::Name.eq(source))
+        .one(db)
+        .await?;
+
+    if let Some(model) = existing {
+        // Update existing source
+        let mut active_model: sources::ActiveModel = model.into();
+        active_model.count = Set(active_model.count.unwrap() + 1);
+        active_model.update(db).await?;
+    } else {
+        // Insert new source
+        let new_source = sources::ActiveModel {
+            name: Set(source.to_string()),
+            count: Set(1),
+            ..Default::default()
+        };
+        new_source.insert(db).await?;
+    }
 
     Ok(())
 }

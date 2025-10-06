@@ -32,14 +32,17 @@ async fn main() {
         api_key: Arc::new(config.api_key.clone()),
     };
 
-    // Initialize tracing
+    // Initialize tracing with sqlx filtering
+    let filter = tracing_subscriber::EnvFilter::new(&config.rust_log)
+        .add_directive("sqlx::query=warn".parse().unwrap());
+
     tracing_subscriber::registry()
-        .with(tracing_subscriber::EnvFilter::new(&config.rust_log))
+        .with(filter)
         .with(tracing_subscriber::fmt::layer())
         .init();
 
     // Initialize database
-    let pool = db::init_pool()
+    let db = db::init_pool()
         .await
         .expect("Failed to initialize database");
 
@@ -88,11 +91,11 @@ async fn main() {
                     app_state.clone(),
                     validate_api_key,
                 ))
-                .with_state(pool.clone()),
+                .with_state(db.clone()),
         )
         .layer(cors)
         .layer(TraceLayer::new_for_http())
-        .with_state(pool);
+        .with_state(db);
 
     // Run it
     let addr = format!("{}:{}", config.host, config.port);
