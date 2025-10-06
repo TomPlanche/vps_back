@@ -1,46 +1,41 @@
 use axum::{Json, extract::State};
+use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder};
 use serde_json::{Value, json};
-use sqlx::postgres::PgPool;
 use tracing::info;
 
-use crate::{ApiResponse, SourceRequest};
+use crate::{ApiResponse, SourceRequest, entities::{prelude::*, sources}};
 
 /// Handles GET requests to the sources path ("/sources").
 /// Fetches all sources and their counts from the database.
 ///
 /// # Arguments
-/// * `State(pool)` - The database connection pool.
-///
-/// # Panics
-/// * If the `as_object_mut` method fails, which should not happen in normal operation.
+/// * `State(db)` - The database connection.
 ///
 /// # Returns
 /// * `Json<Value>` - A JSON response containing the sources and their counts.
-pub async fn get_sources(State(pool): State<PgPool>) -> Json<Value> {
+///
+/// # Panics
+/// * If the JSON object cannot be mutated, which should not happen in normal operation.
+pub async fn get_sources(State(db): State<DatabaseConnection>) -> Json<Value> {
     info!("GET `/sources` endpoint called");
 
-    match sqlx::query!(
-        r#"
-        SELECT name, count
-        FROM sources
-        ORDER BY name
-        "#
-    )
-    .fetch_all(&pool)
-    .await
+    match Sources::find()
+        .order_by_asc(sources::Column::Name)
+        .all(&db)
+        .await
     {
-        Ok(rows) => {
+        Ok(sources_list) => {
             // Convert rows into a map of name to count
-            let sources = rows.into_iter().fold(json!({}), |mut acc, row| {
+            let sources_map = sources_list.into_iter().fold(json!({}), |mut acc, model| {
                 acc.as_object_mut()
                     .unwrap()
-                    .insert(row.name, json!(row.count));
+                    .insert(model.name, json!(model.count));
 
                 acc
             });
 
             ApiResponse::success(json!({
-                "sources": sources
+                "sources": sources_map
             }))
         }
         Err(e) => {
@@ -54,29 +49,28 @@ pub async fn get_sources(State(pool): State<PgPool>) -> Json<Value> {
 /// Increments the count for a given source in the database.
 ///
 /// # Arguments
-/// * `State(pool)` - The database connection pool.
+/// * `State(db)` - The database connection.
 /// * `Json(payload)` - The request payload containing the source name.
 ///
 /// # Returns
 /// * `Json<Value>` - A JSON response containing the updated source count or an error message.
-///
-/// # Panics
-/// May panic if the sqlx macro encounters unexpected type mismatches.
 pub async fn increment_source(
-    State(pool): State<PgPool>,
+    State(db): State<DatabaseConnection>,
     Json(payload): Json<SourceRequest>,
 ) -> Json<Value> {
     info!("POST `/source` endpoint called for: {}", payload.source);
 
     // Increment the source counter
-    match crate::db::increment_source(&pool, &payload.source).await {
+    match crate::db::increment_source(&db, &payload.source).await {
         Ok(()) => {
             // Get the current count
-            let count =
-                sqlx::query_scalar!("SELECT sources.count FROM sources WHERE name = $1", payload.source)
-                    .fetch_one(&pool)
-                    .await
-                    .unwrap_or(-1);
+            let count = Sources::find()
+                .filter(sources::Column::Name.eq(&payload.source))
+                .one(&db)
+                .await
+                .ok()
+                .flatten()
+                .map_or(-1, |model| model.count);
 
             ApiResponse::success(json!({
                 payload.source: count

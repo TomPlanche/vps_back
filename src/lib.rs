@@ -4,6 +4,7 @@ use serde_json::{Value, json};
 
 pub mod config;
 pub mod db;
+pub mod entities;
 pub mod middleware;
 pub mod source;
 pub mod sticker;
