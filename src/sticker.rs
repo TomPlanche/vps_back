@@ -3,7 +3,7 @@ use axum::{
     extract::{Path, State},
 };
 use serde_json::{Value, json};
-use sqlx::sqlite::SqlitePool;
+use sqlx::postgres::PgPool;
 use tracing::info;
 
 use crate::{ApiResponse, StickerRequest, StickerResponse};
@@ -15,7 +15,7 @@ use crate::{ApiResponse, StickerRequest, StickerResponse};
 ///
 /// # Returns
 /// * `Json<Value>` - A JSON response containing all stickers.
-pub async fn get_stickers(State(pool): State<SqlitePool>) -> Json<Value> {
+pub async fn get_stickers(State(pool): State<PgPool>) -> Json<Value> {
     info!("GET `/stickers` endpoint called");
 
     match sqlx::query!(
@@ -32,11 +32,11 @@ pub async fn get_stickers(State(pool): State<SqlitePool>) -> Json<Value> {
             let stickers: Vec<StickerResponse> = rows
                 .into_iter()
                 .map(|row| {
-                    let pictures: Vec<String> =
-                        serde_json::from_str(&row.pictures).unwrap_or_default();
+                    let pictures: Vec<String> = serde_json::from_value(row.pictures)
+                        .unwrap_or_default();
 
                     StickerResponse {
-                        id: row.id.unwrap_or(0),
+                        id: i64::from(row.id),
                         name: row.name,
                         latitude: row.latitude,
                         longitude: row.longitude,
@@ -67,14 +67,17 @@ pub async fn get_stickers(State(pool): State<SqlitePool>) -> Json<Value> {
 ///
 /// # Returns
 /// * `Json<Value>` - A JSON response containing the sticker or an error.
-pub async fn get_sticker(State(pool): State<SqlitePool>, Path(id): Path<i64>) -> Json<Value> {
+///
+/// # Panics
+/// May panic if the sqlx macro encounters unexpected type mismatches.
+pub async fn get_sticker(State(pool): State<PgPool>, Path(id): Path<i32>) -> Json<Value> {
     info!("GET `/stickers/{}` endpoint called", id);
 
     match sqlx::query!(
         r#"
         SELECT id, name, latitude, longitude, place_name, pictures, created_at, updated_at
         FROM stickers
-        WHERE id = ?
+        WHERE id = $1
         "#,
         id
     )
@@ -82,10 +85,11 @@ pub async fn get_sticker(State(pool): State<SqlitePool>, Path(id): Path<i64>) ->
     .await
     {
         Ok(Some(row)) => {
-            let pictures: Vec<String> = serde_json::from_str(&row.pictures).unwrap_or_default();
+            let pictures: Vec<String> = serde_json::from_value(row.pictures)
+                .unwrap_or_default();
 
             let sticker = StickerResponse {
-                id: row.id,
+                id: i64::from(row.id),
                 name: row.name,
                 latitude: row.latitude,
                 longitude: row.longitude,
@@ -115,19 +119,23 @@ pub async fn get_sticker(State(pool): State<SqlitePool>, Path(id): Path<i64>) ->
 ///
 /// # Returns
 /// * `Json<Value>` - A JSON response containing the created sticker or an error.
+///
+/// # Panics
+/// May panic if the sqlx macro encounters unexpected type mismatches.
 pub async fn create_sticker(
-    State(pool): State<SqlitePool>,
+    State(pool): State<PgPool>,
     Json(payload): Json<StickerRequest>,
 ) -> Json<Value> {
     info!("POST `/stickers` endpoint called for: {}", payload.name);
 
-    let pictures_json =
-        serde_json::to_string(&payload.pictures).unwrap_or_else(|_| "[]".to_string());
+    let pictures_json = serde_json::to_value(&payload.pictures)
+        .unwrap_or_else(|_| serde_json::json!([]));
 
     match sqlx::query!(
         r#"
         INSERT INTO stickers (name, latitude, longitude, place_name, pictures)
-        VALUES (?, ?, ?, ?, ?)
+        VALUES ($1, $2, $3, $4, $5)
+        RETURNING id, name, latitude, longitude, place_name, pictures, created_at, updated_at
         "#,
         payload.name,
         payload.latitude,
@@ -135,48 +143,27 @@ pub async fn create_sticker(
         payload.place_name,
         pictures_json
     )
-    .execute(&pool)
+    .fetch_one(&pool)
     .await
     {
-        Ok(result) => {
-            let sticker_id = result.last_insert_rowid();
+        Ok(row) => {
+            let pictures: Vec<String> = serde_json::from_value(row.pictures)
+                .unwrap_or_default();
 
-            // Fetch the created sticker
-            match sqlx::query!(
-                r#"
-                SELECT id, name, latitude, longitude, place_name, pictures, created_at, updated_at
-                FROM stickers
-                WHERE id = ?
-                "#,
-                sticker_id
-            )
-            .fetch_one(&pool)
-            .await
-            {
-                Ok(row) => {
-                    let pictures: Vec<String> =
-                        serde_json::from_str(&row.pictures).unwrap_or_default();
+            let sticker = StickerResponse {
+                id: i64::from(row.id),
+                name: row.name,
+                latitude: row.latitude,
+                longitude: row.longitude,
+                place_name: row.place_name,
+                pictures,
+                created_at: row.created_at.map(|dt| dt.to_string()).unwrap_or_default(),
+                updated_at: row.updated_at.map(|dt| dt.to_string()).unwrap_or_default(),
+            };
 
-                    let sticker = StickerResponse {
-                        id: row.id,
-                        name: row.name,
-                        latitude: row.latitude,
-                        longitude: row.longitude,
-                        place_name: row.place_name,
-                        pictures,
-                        created_at: row.created_at.map(|dt| dt.to_string()).unwrap_or_default(),
-                        updated_at: row.updated_at.map(|dt| dt.to_string()).unwrap_or_default(),
-                    };
-
-                    ApiResponse::created(json!({
-                        "sticker": sticker
-                    }))
-                }
-                Err(e) => {
-                    info!("Database error: {}", e);
-                    ApiResponse::internal_error("Failed to fetch created sticker")
-                }
-            }
+            ApiResponse::created(json!({
+                "sticker": sticker
+            }))
         }
         Err(e) => {
             info!("Database error: {}", e);
