@@ -1,6 +1,6 @@
 use axum::{Json, extract::State};
 use serde_json::{Value, json};
-use sqlx::sqlite::SqlitePool;
+use sqlx::postgres::PgPool;
 use tracing::info;
 
 use crate::{ApiResponse, SourceRequest};
@@ -16,7 +16,7 @@ use crate::{ApiResponse, SourceRequest};
 ///
 /// # Returns
 /// * `Json<Value>` - A JSON response containing the sources and their counts.
-pub async fn get_sources(State(pool): State<SqlitePool>) -> Json<Value> {
+pub async fn get_sources(State(pool): State<PgPool>) -> Json<Value> {
     info!("GET `/sources` endpoint called");
 
     match sqlx::query!(
@@ -59,8 +59,11 @@ pub async fn get_sources(State(pool): State<SqlitePool>) -> Json<Value> {
 ///
 /// # Returns
 /// * `Json<Value>` - A JSON response containing the updated source count or an error message.
+///
+/// # Panics
+/// May panic if the sqlx macro encounters unexpected type mismatches.
 pub async fn increment_source(
-    State(pool): State<SqlitePool>,
+    State(pool): State<PgPool>,
     Json(payload): Json<SourceRequest>,
 ) -> Json<Value> {
     info!("POST `/source` endpoint called for: {}", payload.source);
@@ -70,7 +73,7 @@ pub async fn increment_source(
         Ok(()) => {
             // Get the current count
             let count =
-                sqlx::query_scalar!("SELECT count FROM sources WHERE name = ?", payload.source)
+                sqlx::query_scalar!("SELECT sources.count FROM sources WHERE name = $1", payload.source)
                     .fetch_one(&pool)
                     .await
                     .unwrap_or(-1);
