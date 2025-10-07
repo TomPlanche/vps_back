@@ -21,7 +21,7 @@
 //!
 //! ## Usage
 //!
-//! ```rust,no_run
+//! ```no_run
 //! use axum::Router;
 //! use vps_back::middlewares::tracing::create_tracing_layer;
 //!
@@ -56,7 +56,7 @@ use tracing::Level;
 ///
 /// # Examples
 ///
-/// ```rust,no_run
+/// ```no_run
 /// use axum::Router;
 /// use vps_back::middlewares::tracing::create_tracing_layer;
 ///
