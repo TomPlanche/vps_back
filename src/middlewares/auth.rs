@@ -5,7 +5,7 @@
 //!
 //! ## Usage
 //!
-//! ```rust,no_run
+//! ```no_run
 //! use axum::{Router, middleware};
 //! use vps_back::middlewares::auth::{AppState, validate_api_key};
 //! use std::sync::Arc;
