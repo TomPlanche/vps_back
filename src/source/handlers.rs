@@ -1,9 +1,15 @@
+//! HTTP handlers for source endpoints
+
 use axum::{Json, extract::State};
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder};
 use serde_json::{Value, json};
 use tracing::info;
 
-use crate::{ApiResponse, SourceRequest, entities::{prelude::*, sources}};
+use crate::{
+    ApiResponse,
+    entities::{prelude::*, sources},
+    source::models::SourceRequest,
+};
 
 /// Handles GET requests to the sources path ("/sources").
 /// Fetches all sources and their counts from the database.
@@ -16,7 +22,7 @@ use crate::{ApiResponse, SourceRequest, entities::{prelude::*, sources}};
 ///
 /// # Panics
 /// * If the JSON object cannot be mutated, which should not happen in normal operation.
-pub async fn get_sources(State(db): State<DatabaseConnection>) -> Json<Value> {
+pub async fn get_all_sources(State(db): State<DatabaseConnection>) -> Json<Value> {
     info!("GET `/sources` endpoint called");
 
     match Sources::find()
@@ -30,7 +36,6 @@ pub async fn get_sources(State(db): State<DatabaseConnection>) -> Json<Value> {
                 acc.as_object_mut()
                     .unwrap()
                     .insert(model.name, json!(model.count));
-
                 acc
             });
 
@@ -61,7 +66,7 @@ pub async fn increment_source(
     info!("POST `/source` endpoint called for: {}", payload.source);
 
     // Increment the source counter
-    match crate::db::increment_source(&db, &payload.source).await {
+    match crate::db::increment_source_in_db(&db, &payload.source).await {
         Ok(()) => {
             // Get the current count
             let count = Sources::find()

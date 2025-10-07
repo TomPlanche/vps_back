@@ -1,4 +1,7 @@
-use sea_orm::{ActiveModelTrait, ColumnTrait, Database, DatabaseConnection, DbErr, EntityTrait, QueryFilter, Set};
+use sea_orm::{
+    ActiveModelTrait, ColumnTrait, Database, DatabaseConnection, DbErr, EntityTrait, QueryFilter,
+    Set,
+};
 use tracing::info;
 
 use crate::entities::{prelude::*, sources};
@@ -16,8 +19,7 @@ use crate::entities::{prelude::*, sources};
 /// # Panics
 /// Panics if the `DATABASE_URL` environment variable is not set.
 pub async fn init_pool() -> Result<DatabaseConnection, DbErr> {
-    let database_url = std::env::var("DATABASE_URL")
-        .expect("DATABASE_URL must be set");
+    let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
 
     let db = Database::connect(&database_url).await?;
 
@@ -39,7 +41,7 @@ pub async fn init_pool() -> Result<DatabaseConnection, DbErr> {
 /// Returns an error if:
 /// - Database query fails
 /// - Database transaction fails
-pub async fn increment_source(db: &DatabaseConnection, source: &str) -> Result<(), DbErr> {
+pub async fn increment_source_in_db(db: &DatabaseConnection, source: &str) -> Result<(), DbErr> {
     // Try to find existing source
     let existing = Sources::find()
         .filter(sources::Column::Name.eq(source))

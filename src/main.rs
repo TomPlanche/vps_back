@@ -2,18 +2,15 @@ use axum::{
     Json, Router,
     http::{HeaderName, HeaderValue, Method},
     middleware,
-    routing::{get, post},
+    routing::get,
 };
 use serde_json::{Value, json};
 use std::sync::Arc;
-use tower_http::{cors::CorsLayer, services::ServeDir, trace::TraceLayer};
+use tower_http::cors::CorsLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use vps_back::{
-    ApiResponse,
-    config::Config,
-    db,
-    middleware::{AppState, validate_api_key},
-    source, sticker,
+    ApiResponse, config::Config, db::init_pool, middlewares, source,
+    static_files::static_files_service, sticker,
 };
 
 #[tokio::main]
@@ -28,7 +25,7 @@ async fn main() {
     });
 
     // Create application state
-    let app_state = AppState {
+    let app_state = middlewares::auth::AppState {
         api_key: Arc::new(config.api_key.clone()),
     };
 
@@ -42,9 +39,7 @@ async fn main() {
         .init();
 
     // Initialize database
-    let db = db::init_pool()
-        .await
-        .expect("Failed to initialize database");
+    let db = init_pool().await.expect("Failed to initialize database");
 
     // Configure CORS
     let allowed_origins = config
@@ -77,24 +72,22 @@ async fn main() {
     }
 
     // Build our application with a route
+    // Create API router with protected routes
+    let api_router = Router::new()
+        .nest("/source", source::router())
+        .nest("/stickers", sticker::router())
+        .layer(middleware::from_fn_with_state(
+            app_state.clone(),
+            middlewares::auth::validate_api_key,
+        ))
+        .with_state(db.clone());
+
     let app = Router::new()
         .route("/", get(root))
-        .nest_service("/static", ServeDir::new("static"))
-        .merge(
-            Router::new()
-                .route("/source", get(source::get_sources))
-                .route("/source", post(source::increment_source))
-                .route("/stickers", get(sticker::get_stickers))
-                .route("/stickers", post(sticker::create_sticker))
-                .route("/stickers/:id", get(sticker::get_sticker))
-                .layer(middleware::from_fn_with_state(
-                    app_state.clone(),
-                    validate_api_key,
-                ))
-                .with_state(db.clone()),
-        )
+        .nest_service("/static", static_files_service())
+        .nest("/api", api_router)
         .layer(cors)
-        .layer(TraceLayer::new_for_http())
+        .layer(middlewares::tracing::create_tracing_layer())
         .with_state(db);
 
     // Run it
