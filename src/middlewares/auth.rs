@@ -1,3 +1,23 @@
+//! # Authentication Middleware
+//!
+//! This module provides API key authentication middleware for protecting routes.
+//! It validates the `x-api-key` header against the configured API key.
+//!
+//! ## Usage
+//!
+//! ```rust,no_run
+//! use axum::{Router, middleware};
+//! use vps_back::middlewares::auth::{AppState, validate_api_key};
+//! use std::sync::Arc;
+//!
+//! let app_state = AppState {
+//!     api_key: Arc::new("your-api-key".to_string()),
+//! };
+//!
+//! let app = Router::new()
+//!     .layer(middleware::from_fn_with_state(app_state.clone(), validate_api_key));
+//! ```
+
 use axum::{
     Json,
     extract::{Request, State},

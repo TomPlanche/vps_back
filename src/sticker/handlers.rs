@@ -1,3 +1,10 @@
+//! Sticker route handlers
+//!
+//! This module contains all HTTP handlers for sticker-related endpoints:
+//! - GET /stickers - Fetch all stickers
+//! - GET /stickers/:id - Fetch a single sticker by ID
+//! - POST /stickers - Create a new sticker
+
 use axum::{
     Json,
     extract::{Path, State},
@@ -6,7 +13,11 @@ use sea_orm::{ActiveModelTrait, DatabaseConnection, EntityTrait, QueryOrder, Set
 use serde_json::{Value, json};
 use tracing::info;
 
-use crate::{ApiResponse, StickerRequest, StickerResponse, entities::{prelude::*, stickers}};
+use super::models::{StickerRequest, StickerResponse};
+use crate::{
+    ApiResponse,
+    entities::{prelude::*, stickers},
+};
 
 /// Handles GET requests to fetch all stickers.
 ///
@@ -14,8 +25,8 @@ use crate::{ApiResponse, StickerRequest, StickerResponse, entities::{prelude::*,
 /// * `State(db)` - The database connection.
 ///
 /// # Returns
-/// * `Json<Value>` - A JSON response containing all stickers.
-pub async fn get_stickers(State(db): State<DatabaseConnection>) -> Json<Value> {
+/// * `Json<Value>` - A JSON response containing all stickers ordered by creation date (newest first).
+pub async fn get_all_stickers(State(db): State<DatabaseConnection>) -> Json<Value> {
     info!("GET `/stickers` endpoint called");
 
     match Stickers::find()
@@ -27,8 +38,8 @@ pub async fn get_stickers(State(db): State<DatabaseConnection>) -> Json<Value> {
             let stickers: Vec<StickerResponse> = stickers_list
                 .into_iter()
                 .map(|model| {
-                    let pictures: Vec<String> = serde_json::from_value(model.pictures)
-                        .unwrap_or_default();
+                    let pictures: Vec<String> =
+                        serde_json::from_value(model.pictures).unwrap_or_default();
 
                     StickerResponse {
                         id: i64::from(model.id),
@@ -65,13 +76,9 @@ pub async fn get_stickers(State(db): State<DatabaseConnection>) -> Json<Value> {
 pub async fn get_sticker(State(db): State<DatabaseConnection>, Path(id): Path<i32>) -> Json<Value> {
     info!("GET `/stickers/{}` endpoint called", id);
 
-    match Stickers::find_by_id(id)
-        .one(&db)
-        .await
-    {
+    match Stickers::find_by_id(id).one(&db).await {
         Ok(Some(model)) => {
-            let pictures: Vec<String> = serde_json::from_value(model.pictures)
-                .unwrap_or_default();
+            let pictures: Vec<String> = serde_json::from_value(model.pictures).unwrap_or_default();
 
             let sticker = StickerResponse {
                 id: i64::from(model.id),
@@ -110,8 +117,8 @@ pub async fn create_sticker(
 ) -> Json<Value> {
     info!("POST `/stickers` endpoint called for: {}", payload.name);
 
-    let pictures_json = serde_json::to_value(&payload.pictures)
-        .unwrap_or_else(|_| serde_json::json!([]));
+    let pictures_json =
+        serde_json::to_value(&payload.pictures).unwrap_or_else(|_| serde_json::json!([]));
 
     let new_sticker = stickers::ActiveModel {
         name: Set(payload.name),
@@ -124,8 +131,7 @@ pub async fn create_sticker(
 
     match new_sticker.insert(&db).await {
         Ok(model) => {
-            let pictures: Vec<String> = serde_json::from_value(model.pictures)
-                .unwrap_or_default();
+            let pictures: Vec<String> = serde_json::from_value(model.pictures).unwrap_or_default();
 
             let sticker = StickerResponse {
                 id: i64::from(model.id),

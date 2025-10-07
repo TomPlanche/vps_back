@@ -1,12 +1,12 @@
 use axum::{Json, http::StatusCode};
-use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
 pub mod config;
 pub mod db;
 pub mod entities;
-pub mod middleware;
+pub mod middlewares;
 pub mod source;
+pub mod static_files;
 pub mod sticker;
 
 /// Represents a standardized API response
@@ -14,39 +14,6 @@ pub mod sticker;
 pub struct ApiResponse {
     pub status: StatusCode,
     pub json: Value,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct SourceRequest {
-    pub source: String,
-}
-
-#[derive(Debug, Serialize)]
-pub struct SourceResponse {
-    pub source: String,
-    pub count: i64,
-}
-
-#[derive(Debug, Deserialize, Serialize)]
-pub struct StickerRequest {
-    pub name: String,
-    pub latitude: f64,
-    pub longitude: f64,
-    pub place_name: String,
-    #[serde(default)]
-    pub pictures: Vec<String>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct StickerResponse {
-    pub id: i64,
-    pub name: String,
-    pub latitude: f64,
-    pub longitude: f64,
-    pub place_name: String,
-    pub pictures: Vec<String>,
-    pub created_at: String,
-    pub updated_at: String,
 }
 
 impl ApiResponse {
