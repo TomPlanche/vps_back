@@ -85,15 +85,16 @@ async fn main() {
     let app = Router::new()
         .route("/", get(root))
         .nest_service("/static", static_files_service())
-        .nest("/api", api_router)
+        .nest("/secure", api_router)
         .layer(cors)
         .layer(middlewares::tracing::create_tracing_layer())
         .with_state(db);
 
-    // Run it
     let addr = format!("{}:{}", config.host, config.port);
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
+
     tracing::info!("listening on {}", listener.local_addr().unwrap());
+
     axum::serve(listener, app).await.unwrap();
 }
 
