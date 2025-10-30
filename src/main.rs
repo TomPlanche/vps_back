@@ -1,6 +1,6 @@
 use axum::{
     Json, Router,
-    http::{HeaderName, HeaderValue, Method},
+    http::{HeaderName, HeaderValue, Method, StatusCode},
     middleware,
     routing::get,
 };
@@ -100,7 +100,7 @@ async fn main() {
 
 /// Handles GET requests to the root path ("/").
 /// Serves as a simple health check endpoint.
-async fn root() -> Json<Value> {
+async fn root() -> (StatusCode, Json<Value>) {
     tracing::info!("GET `/` endpoint called");
 
     ApiResponse::success(json!({

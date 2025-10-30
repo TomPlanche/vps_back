@@ -8,6 +8,7 @@
 use axum::{
     Json,
     extract::{Path, State},
+    http::StatusCode,
 };
 use sea_orm::{ActiveModelTrait, DatabaseConnection, EntityTrait, QueryOrder, Set};
 use serde_json::{Value, json};
@@ -25,8 +26,8 @@ use crate::{
 /// * `State(db)` - The database connection.
 ///
 /// # Returns
-/// * `Json<Value>` - A JSON response containing all stickers ordered by creation date (newest first).
-pub async fn get_all_stickers(State(db): State<DatabaseConnection>) -> Json<Value> {
+/// * `(StatusCode, Json<Value>)` - A tuple with HTTP status code and JSON response containing all stickers ordered by creation date (newest first).
+pub async fn get_all_stickers(State(db): State<DatabaseConnection>) -> (StatusCode, Json<Value>) {
     info!("GET `/stickers` endpoint called");
 
     match Stickers::find()
@@ -72,8 +73,11 @@ pub async fn get_all_stickers(State(db): State<DatabaseConnection>) -> Json<Valu
 /// * `Path(id)` - The ID of the sticker to fetch.
 ///
 /// # Returns
-/// * `Json<Value>` - A JSON response containing the sticker or an error.
-pub async fn get_sticker(State(db): State<DatabaseConnection>, Path(id): Path<i32>) -> Json<Value> {
+/// * `(StatusCode, Json<Value>)` - A tuple with HTTP status code and JSON response containing the sticker or an error.
+pub async fn get_sticker(
+    State(db): State<DatabaseConnection>,
+    Path(id): Path<i32>,
+) -> (StatusCode, Json<Value>) {
     info!("GET `/stickers/{}` endpoint called", id);
 
     match Stickers::find_by_id(id).one(&db).await {
@@ -110,11 +114,11 @@ pub async fn get_sticker(State(db): State<DatabaseConnection>, Path(id): Path<i3
 /// * `Json(payload)` - The request payload containing sticker data.
 ///
 /// # Returns
-/// * `Json<Value>` - A JSON response containing the created sticker or an error.
+/// * `(StatusCode, Json<Value>)` - A tuple with HTTP status code and JSON response containing the created sticker or an error.
 pub async fn create_sticker(
     State(db): State<DatabaseConnection>,
     Json(payload): Json<StickerRequest>,
-) -> Json<Value> {
+) -> (StatusCode, Json<Value>) {
     info!("POST `/stickers` endpoint called for: {}", payload.name);
 
     let pictures_json =

@@ -1,6 +1,6 @@
 //! HTTP handlers for source endpoints
 
-use axum::{Json, extract::State};
+use axum::{Json, extract::State, http::StatusCode};
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder};
 use serde_json::{Value, json};
 use tracing::info;
@@ -18,11 +18,11 @@ use crate::{
 /// * `State(db)` - The database connection.
 ///
 /// # Returns
-/// * `Json<Value>` - A JSON response containing the sources and their counts.
+/// * `(StatusCode, Json<Value>)` - A tuple with HTTP status code and JSON response containing the sources and their counts.
 ///
 /// # Panics
 /// * If the JSON object cannot be mutated, which should not happen in normal operation.
-pub async fn get_all_sources(State(db): State<DatabaseConnection>) -> Json<Value> {
+pub async fn get_all_sources(State(db): State<DatabaseConnection>) -> (StatusCode, Json<Value>) {
     info!("GET `/sources` endpoint called");
 
     match Sources::find()
@@ -58,11 +58,11 @@ pub async fn get_all_sources(State(db): State<DatabaseConnection>) -> Json<Value
 /// * `Json(payload)` - The request payload containing the source name.
 ///
 /// # Returns
-/// * `Json<Value>` - A JSON response containing the updated source count or an error message.
+/// * `(StatusCode, Json<Value>)` - A tuple with HTTP status code and JSON response containing the updated source count or an error message.
 pub async fn increment_source(
     State(db): State<DatabaseConnection>,
     Json(payload): Json<SourceRequest>,
-) -> Json<Value> {
+) -> (StatusCode, Json<Value>) {
     info!("POST `/source` endpoint called for: {}", payload.source);
 
     // Increment the source counter
