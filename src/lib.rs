@@ -1,75 +1,15 @@
-use axum::{Json, http::StatusCode};
-use serde_json::{Value, json};
-
 pub mod config;
 pub mod db;
 pub mod entities;
+pub mod error;
 pub mod middlewares;
+pub mod pagination;
+pub mod response;
 pub mod source;
 pub mod static_files;
 pub mod sticker;
 
-/// Represents a standardized API response with proper HTTP status codes
-#[derive(Debug)]
-pub struct ApiResponse {
-    pub status: StatusCode,
-    pub json: Value,
-}
-
-impl ApiResponse {
-    /// Creates a new `ApiResponse` with the given status and JSON value
-    pub fn base(status: StatusCode, json: &Value) -> (StatusCode, Json<Value>) {
-        (
-            status,
-            Json(json!({
-                "status": status.as_u16(),
-                "success": status.is_success(),
-                "data": json
-            })),
-        )
-    }
-
-    /// Creates a success response with optional data
-    pub fn success(data: impl Into<Value>) -> (StatusCode, Json<Value>) {
-        Self::base(StatusCode::OK, &data.into())
-    }
-
-    /// Creates a created response with optional data
-    pub fn created(data: impl Into<Value>) -> (StatusCode, Json<Value>) {
-        Self::base(StatusCode::CREATED, &data.into())
-    }
-
-    /// Creates an error response with a message
-    pub fn error(status: StatusCode, message: &str) -> (StatusCode, Json<Value>) {
-        (
-            status,
-            Json(json!({
-                "status": status.as_u16(),
-                "success": false,
-                "error": {
-                    "message": message
-                }
-            })),
-        )
-    }
-
-    /// Creates a bad request error response
-    pub fn bad_request(message: &str) -> (StatusCode, Json<Value>) {
-        Self::error(StatusCode::BAD_REQUEST, message)
-    }
-
-    /// Creates a not found error response
-    pub fn not_found(message: &str) -> (StatusCode, Json<Value>) {
-        Self::error(StatusCode::NOT_FOUND, message)
-    }
-
-    /// Creates an internal server error response
-    pub fn internal_error(message: &str) -> (StatusCode, Json<Value>) {
-        Self::error(StatusCode::INTERNAL_SERVER_ERROR, message)
-    }
-
-    /// Creates an unauthorized error response
-    pub fn unauthorized(message: &str) -> (StatusCode, Json<Value>) {
-        Self::error(StatusCode::UNAUTHORIZED, message)
-    }
-}
+// Re-export error types for convenience
+pub use error::{ApiError, ApiResult};
+pub use pagination::PaginationParams;
+pub use response::{ApiResponse, Metadata, data_response, data_response_with_metadata};

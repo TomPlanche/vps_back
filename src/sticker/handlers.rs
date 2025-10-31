@@ -5,65 +5,103 @@
 //! - GET /stickers/:id - Fetch a single sticker by ID
 //! - POST /stickers - Create a new sticker
 
+use anyhow::Context;
 use axum::{
     Json,
-    extract::{Path, State},
-    http::StatusCode,
+    extract::{Path, Query, State},
 };
-use sea_orm::{ActiveModelTrait, DatabaseConnection, EntityTrait, QueryOrder, Set};
-use serde_json::{Value, json};
+use sea_orm::{
+    ActiveModelTrait, DatabaseConnection, EntityTrait, PaginatorTrait, QueryOrder, QuerySelect, Set,
+};
+use serde_json::json;
 use tracing::info;
 
 use super::models::{StickerRequest, StickerResponse};
 use crate::{
-    ApiResponse,
+    data_response, data_response_with_metadata,
     entities::{prelude::*, stickers},
+    error::{ApiError, ApiResult},
+    pagination::PaginationParams,
+    response::Metadata,
 };
 
 /// Handles GET requests to fetch all stickers.
 ///
 /// # Arguments
 /// * `State(db)` - The database connection.
+/// * `Query(params)` - Pagination parameters (page, limit).
 ///
 /// # Returns
-/// * `(StatusCode, Json<Value>)` - A tuple with HTTP status code and JSON response containing all stickers ordered by creation date (newest first).
-pub async fn get_all_stickers(State(db): State<DatabaseConnection>) -> (StatusCode, Json<Value>) {
-    info!("GET `/stickers` endpoint called");
+/// * `ApiResult<Json<Value>>` - JSON response containing all stickers ordered by creation date (newest first) with pagination metadata.
+///
+/// # Errors
+/// Returns an error if the database query fails.
+pub async fn get_all_stickers(
+    State(db): State<DatabaseConnection>,
+    Query(mut params): Query<PaginationParams>,
+) -> ApiResult<Json<serde_json::Value>> {
+    info!(
+        "GET `/stickers` endpoint called with page={}, limit={}",
+        params.page, params.limit
+    );
 
-    match Stickers::find()
-        .order_by_desc(stickers::Column::CreatedAt)
+    // Validate pagination parameters
+    params.validate();
+
+    // Create base query
+    let query = Stickers::find().order_by_desc(stickers::Column::CreatedAt);
+
+    // Count total items
+    #[allow(clippy::cast_possible_truncation)]
+    let total_count = query
+        .clone()
+        .count(&db)
+        .await
+        .context("Failed to count stickers")? as u32;
+
+    // Fetch paginated results
+    let stickers_list = query
+        .offset(params.offset())
+        .limit(params.limit_u64())
         .all(&db)
         .await
-    {
-        Ok(stickers_list) => {
-            let stickers: Vec<StickerResponse> = stickers_list
-                .into_iter()
-                .map(|model| {
-                    let pictures: Vec<String> =
-                        serde_json::from_value(model.pictures).unwrap_or_default();
+        .context("Failed to fetch stickers from database")?;
 
-                    StickerResponse {
-                        id: i64::from(model.id),
-                        name: model.name,
-                        latitude: model.latitude,
-                        longitude: model.longitude,
-                        place_name: model.place_name,
-                        pictures,
-                        created_at: model.created_at.to_string(),
-                        updated_at: model.updated_at.to_string(),
-                    }
-                })
-                .collect();
+    let stickers: Result<Vec<StickerResponse>, anyhow::Error> = stickers_list
+        .into_iter()
+        .map(|model| {
+            let pictures: Vec<String> =
+                serde_json::from_value(model.pictures).context("Failed to parse pictures JSON")?;
 
-            ApiResponse::success(json!({
-                "stickers": stickers
-            }))
-        }
-        Err(e) => {
-            info!("Database error: {}", e);
-            ApiResponse::internal_error("Failed to fetch stickers")
-        }
-    }
+            Ok(StickerResponse {
+                id: i64::from(model.id),
+                name: model.name,
+                latitude: model.latitude,
+                longitude: model.longitude,
+                place_name: model.place_name,
+                pictures,
+                created_at: model.created_at.to_string(),
+                updated_at: model.updated_at.to_string(),
+            })
+        })
+        .collect();
+
+    let stickers = stickers?;
+
+    // Build metadata
+    let metadata = Metadata::paginated(
+        params.page,
+        params.limit,
+        total_count,
+        "/secure/stickers".to_string(),
+    );
+
+    Ok(data_response_with_metadata(
+        json!({
+            "stickers": stickers
+        }),
+        &metadata,
+    ))
 }
 
 /// Handles GET requests to fetch a single sticker by ID.
@@ -73,38 +111,39 @@ pub async fn get_all_stickers(State(db): State<DatabaseConnection>) -> (StatusCo
 /// * `Path(id)` - The ID of the sticker to fetch.
 ///
 /// # Returns
-/// * `(StatusCode, Json<Value>)` - A tuple with HTTP status code and JSON response containing the sticker or an error.
+/// * `ApiResult<Json<Value>>` - JSON response containing the sticker.
+///
+/// # Errors
+/// Returns an error if the database query fails or the sticker is not found.
 pub async fn get_sticker(
     State(db): State<DatabaseConnection>,
     Path(id): Path<i32>,
-) -> (StatusCode, Json<Value>) {
+) -> ApiResult<Json<serde_json::Value>> {
     info!("GET `/stickers/{}` endpoint called", id);
 
-    match Stickers::find_by_id(id).one(&db).await {
-        Ok(Some(model)) => {
-            let pictures: Vec<String> = serde_json::from_value(model.pictures).unwrap_or_default();
+    let model = Stickers::find_by_id(id)
+        .one(&db)
+        .await
+        .with_context(|| format!("Failed to fetch sticker with id {id}"))?
+        .ok_or_else(|| ApiError::not_found(format!("Sticker with id {id} not found")))?;
 
-            let sticker = StickerResponse {
-                id: i64::from(model.id),
-                name: model.name,
-                latitude: model.latitude,
-                longitude: model.longitude,
-                place_name: model.place_name,
-                pictures,
-                created_at: model.created_at.to_string(),
-                updated_at: model.updated_at.to_string(),
-            };
+    let pictures: Vec<String> =
+        serde_json::from_value(model.pictures).context("Failed to parse pictures JSON")?;
 
-            ApiResponse::success(json!({
-                "sticker": sticker
-            }))
-        }
-        Ok(None) => ApiResponse::not_found("Sticker not found"),
-        Err(e) => {
-            info!("Database error: {}", e);
-            ApiResponse::internal_error("Failed to fetch sticker")
-        }
-    }
+    let sticker = StickerResponse {
+        id: i64::from(model.id),
+        name: model.name,
+        latitude: model.latitude,
+        longitude: model.longitude,
+        place_name: model.place_name,
+        pictures,
+        created_at: model.created_at.to_string(),
+        updated_at: model.updated_at.to_string(),
+    };
+
+    Ok(data_response(json!({
+        "sticker": sticker
+    })))
 }
 
 /// Handles POST requests to create a new sticker.
@@ -114,15 +153,18 @@ pub async fn get_sticker(
 /// * `Json(payload)` - The request payload containing sticker data.
 ///
 /// # Returns
-/// * `(StatusCode, Json<Value>)` - A tuple with HTTP status code and JSON response containing the created sticker or an error.
+/// * `ApiResult<Json<Value>>` - JSON response containing the created sticker.
+///
+/// # Errors
+/// Returns an error if the database operation fails or JSON serialization fails.
 pub async fn create_sticker(
     State(db): State<DatabaseConnection>,
     Json(payload): Json<StickerRequest>,
-) -> (StatusCode, Json<Value>) {
+) -> ApiResult<Json<serde_json::Value>> {
     info!("POST `/stickers` endpoint called for: {}", payload.name);
 
     let pictures_json =
-        serde_json::to_value(&payload.pictures).unwrap_or_else(|_| serde_json::json!([]));
+        serde_json::to_value(&payload.pictures).context("Failed to serialize pictures to JSON")?;
 
     let new_sticker = stickers::ActiveModel {
         name: Set(payload.name),
@@ -133,28 +175,26 @@ pub async fn create_sticker(
         ..Default::default()
     };
 
-    match new_sticker.insert(&db).await {
-        Ok(model) => {
-            let pictures: Vec<String> = serde_json::from_value(model.pictures).unwrap_or_default();
+    let model = new_sticker
+        .insert(&db)
+        .await
+        .context("Failed to insert new sticker into database")?;
 
-            let sticker = StickerResponse {
-                id: i64::from(model.id),
-                name: model.name,
-                latitude: model.latitude,
-                longitude: model.longitude,
-                place_name: model.place_name,
-                pictures,
-                created_at: model.created_at.to_string(),
-                updated_at: model.updated_at.to_string(),
-            };
+    let pictures: Vec<String> = serde_json::from_value(model.pictures)
+        .context("Failed to parse pictures JSON from created sticker")?;
 
-            ApiResponse::created(json!({
-                "sticker": sticker
-            }))
-        }
-        Err(e) => {
-            info!("Database error: {}", e);
-            ApiResponse::internal_error("Failed to create sticker")
-        }
-    }
+    let sticker = StickerResponse {
+        id: i64::from(model.id),
+        name: model.name,
+        latitude: model.latitude,
+        longitude: model.longitude,
+        place_name: model.place_name,
+        pictures,
+        created_at: model.created_at.to_string(),
+        updated_at: model.updated_at.to_string(),
+    };
+
+    Ok(data_response(json!({
+        "sticker": sticker
+    })))
 }

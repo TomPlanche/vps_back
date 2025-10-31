@@ -1,6 +1,6 @@
+use anyhow::{Context, Result};
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, Database, DatabaseConnection, DbErr, EntityTrait, QueryFilter,
-    Set,
+    ActiveModelTrait, ColumnTrait, Database, DatabaseConnection, EntityTrait, QueryFilter, Set,
 };
 use tracing::info;
 
@@ -15,13 +15,13 @@ use crate::entities::{prelude::*, sources};
 /// Returns an error if:
 /// - Database connection fails
 /// - `DATABASE_URL` environment variable is not set
-///
-/// # Panics
-/// Panics if the `DATABASE_URL` environment variable is not set.
-pub async fn init_pool() -> Result<DatabaseConnection, DbErr> {
-    let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+pub async fn init_pool() -> Result<DatabaseConnection> {
+    let database_url =
+        std::env::var("DATABASE_URL").context("DATABASE_URL environment variable is not set")?;
 
-    let db = Database::connect(&database_url).await?;
+    let db = Database::connect(&database_url)
+        .await
+        .context("Failed to connect to database")?;
 
     info!("Database connection initialized");
 
@@ -41,18 +41,22 @@ pub async fn init_pool() -> Result<DatabaseConnection, DbErr> {
 /// Returns an error if:
 /// - Database query fails
 /// - Database transaction fails
-pub async fn increment_source_in_db(db: &DatabaseConnection, source: &str) -> Result<(), DbErr> {
+pub async fn increment_source_in_db(db: &DatabaseConnection, source: &str) -> Result<()> {
     // Try to find existing source
     let existing = Sources::find()
         .filter(sources::Column::Name.eq(source))
         .one(db)
-        .await?;
+        .await
+        .context("Failed to query existing source from database")?;
 
     if let Some(model) = existing {
         // Update existing source
         let mut active_model: sources::ActiveModel = model.into();
         active_model.count = Set(active_model.count.unwrap() + 1);
-        active_model.update(db).await?;
+        active_model
+            .update(db)
+            .await
+            .with_context(|| format!("Failed to update counter for source '{source}'"))?;
     } else {
         // Insert new source
         let new_source = sources::ActiveModel {
@@ -60,7 +64,10 @@ pub async fn increment_source_in_db(db: &DatabaseConnection, source: &str) -> Re
             count: Set(1),
             ..Default::default()
         };
-        new_source.insert(db).await?;
+        new_source
+            .insert(db)
+            .await
+            .with_context(|| format!("Failed to create new source '{source}'"))?;
     }
 
     Ok(())
