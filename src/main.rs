@@ -1,15 +1,15 @@
 use axum::{
     Json, Router,
-    http::{HeaderName, HeaderValue, Method, StatusCode},
+    http::{HeaderName, HeaderValue, Method},
     middleware,
     routing::get,
 };
-use serde_json::{Value, json};
+use serde_json::json;
 use std::sync::Arc;
 use tower_http::cors::CorsLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use vps_back::{
-    ApiResponse, config::Config, db::init_pool, middlewares, source,
+    config::Config, data_response, db::init_pool, middlewares, source,
     static_files::static_files_service, sticker,
 };
 
@@ -39,7 +39,10 @@ async fn main() {
         .init();
 
     // Initialize database
-    let db = init_pool().await.expect("Failed to initialize database");
+    let db = init_pool().await.unwrap_or_else(|e| {
+        eprintln!("Database initialization error: {e:#}");
+        std::process::exit(1);
+    });
 
     // Configure CORS
     let allowed_origins = config
@@ -100,10 +103,10 @@ async fn main() {
 
 /// Handles GET requests to the root path ("/").
 /// Serves as a simple health check endpoint.
-async fn root() -> (StatusCode, Json<Value>) {
+async fn root() -> Json<serde_json::Value> {
     tracing::info!("GET `/` endpoint called");
 
-    ApiResponse::success(json!({
+    data_response(json!({
         "message": "Hello, I'm Tom Planche!"
     }))
 }
