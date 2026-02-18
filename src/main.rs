@@ -9,7 +9,7 @@ use std::sync::Arc;
 use tower_http::cors::CorsLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use vps_back::{
-    config::Config, data_response, db::init_pool, middlewares, source,
+    brew, config::Config, data_response, db::init_pool, middlewares, source,
     static_files::static_files_service, sticker,
 };
 
@@ -89,6 +89,7 @@ async fn main() {
         .route("/", get(root))
         .nest_service("/static", static_files_service())
         .nest("/secure", api_router)
+        .nest("/brew", brew::router())
         .layer(cors)
         .layer(middlewares::tracing::create_tracing_layer())
         .with_state(db);

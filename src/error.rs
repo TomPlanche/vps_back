@@ -38,7 +38,7 @@ pub enum ApiError {
 impl ApiError {
     /// Map the error to an HTTP status code
     #[must_use]
-    pub fn status_code(&self) -> StatusCode {
+    pub const fn status_code(&self) -> StatusCode {
         match self {
             Self::ValidationFailed(_) => StatusCode::BAD_REQUEST,
             Self::NotFound(_) => StatusCode::NOT_FOUND,

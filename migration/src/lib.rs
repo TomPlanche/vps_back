@@ -2,6 +2,7 @@ pub use sea_orm_migration::prelude::*;
 
 mod m20250614_163005_create_sources_table;
 mod m20251001_000000_create_stickers_table;
+mod m20260218_000000_create_brew_downloads_table;
 
 pub struct Migrator;
 
@@ -11,6 +12,7 @@ impl MigratorTrait for Migrator {
         vec![
             Box::new(m20250614_163005_create_sources_table::Migration),
             Box::new(m20251001_000000_create_stickers_table::Migration),
+            Box::new(m20260218_000000_create_brew_downloads_table::Migration),
         ]
     }
 }

@@ -14,11 +14,11 @@ pub struct PaginationParams {
     pub limit: u32,
 }
 
-fn default_page() -> u32 {
+const fn default_page() -> u32 {
     1
 }
 
-fn default_limit() -> u32 {
+const fn default_limit() -> u32 {
     20
 }
 
@@ -48,7 +48,7 @@ impl PaginationParams {
     }
 
     /// Validate pagination parameters
-    pub fn validate(&mut self) {
+    pub const fn validate(&mut self) {
         // Ensure page is at least 1
         if self.page == 0 {
             self.page = 1;
