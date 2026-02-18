@@ -45,7 +45,7 @@ pub struct Metadata {
 impl Metadata {
     /// Create minimal metadata for non-paginated responses
     #[must_use]
-    pub fn minimal() -> Self {
+    pub const fn minimal() -> Self {
         Self {
             page: None,
             limit: None,
@@ -105,7 +105,7 @@ pub struct ApiResponse<T> {
 
 impl<T: Serialize> ApiResponse<T> {
     /// Create a simple response with data only
-    pub fn data(data: T) -> Json<Self> {
+    pub const fn data(data: T) -> Json<Self> {
         Json(Self {
             _metadata: None,
             data,
@@ -114,7 +114,7 @@ impl<T: Serialize> ApiResponse<T> {
 
     /// Create a response with metadata
     #[allow(dead_code)]
-    pub fn with_metadata(data: T, metadata: Metadata) -> Json<Self> {
+    pub const fn with_metadata(data: T, metadata: Metadata) -> Json<Self> {
         Json(Self {
             _metadata: Some(metadata),
             data,
