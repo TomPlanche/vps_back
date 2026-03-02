@@ -20,6 +20,7 @@ cargo run
 | `PORT`            | no       | `8000`                                        |
 | `ALLOWED_ORIGINS` | no       | `http://localhost:3000,http://localhost:5173`  |
 | `RUST_LOG`        | no       | `info`                                        |
+| `STATIC_DIR`      | no       | `static`                                      |
 
 `DATABASE_URL` format: `postgresql://user:password@host:port/dbname`
 

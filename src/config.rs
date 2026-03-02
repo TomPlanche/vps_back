@@ -8,6 +8,7 @@ pub struct Config {
     pub api_key: String,
     pub allowed_origins: Vec<String>,
     pub rust_log: String,
+    pub static_dir: String,
 }
 
 impl Config {
@@ -37,12 +38,15 @@ impl Config {
 
         let rust_log = env::var("RUST_LOG").unwrap_or_else(|_| "info".to_string());
 
+        let static_dir = env::var("STATIC_DIR").unwrap_or_else(|_| "static".to_string());
+
         Ok(Self {
             host,
             port,
             api_key,
             allowed_origins,
             rust_log,
+            static_dir,
         })
     }
 }
