@@ -87,7 +87,7 @@ async fn main() {
 
     let app = Router::new()
         .route("/", get(root))
-        .nest_service("/static", static_files_service())
+        .nest_service("/static", static_files_service(&config.static_dir))
         .nest("/secure", api_router)
         .nest("/brew", brew::router())
         .layer(cors)
