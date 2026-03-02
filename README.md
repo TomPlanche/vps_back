@@ -21,6 +21,7 @@ cargo run
 | `ALLOWED_ORIGINS` | no       | `http://localhost:3000,http://localhost:5173`  |
 | `RUST_LOG`        | no       | `info`                                        |
 | `STATIC_DIR`      | no       | `static`                                      |
+| `GITHUB_TOKEN`    | no       | —                                             |
 
 `DATABASE_URL` format: `postgresql://user:password@host:port/dbname`
 
@@ -30,7 +31,7 @@ cargo run
 
 **GET /** — health check
 
-**GET /static/\<path\>** — static files (LastFM fetcher output)
+**GET /static/\<path\>** — static files (LastFM fetcher output, `github-stats.json`)
 
 **GET /brew/track/:project/:filename** — records a Homebrew bottle download and redirects (`302`) to the real GitHub release asset. Used by setting `root_url` in the formula's bottle block:
 
@@ -55,6 +56,34 @@ end
     }
   }
 }
+```
+
+**GET /stats/github** — 6 most recently updated repos (owner + collaborator), generated every 5 minutes from `GITHUB_TOKEN`. Returns `null` if the token is not set or the file has not been written yet:
+
+```json
+{
+  "data": [
+    {
+      "name": "rona",
+      "link": "https://github.com/rona-rs/rona",
+      "stars": 2,
+      "owner": "rona-rs",
+      "description": "A powerful CLI tool",
+      "commits": {
+        "total": 293,
+        "last": { "hash": "faf085d", "link": "https://github.com/...", "date": "2025-01-01T00:00:00Z" }
+      }
+    }
+  ]
+}
+```
+
+**GET /stats/brew** — download counts grouped by project and version (same data as `/brew/stats`).
+
+**GET /stats/sources** — all analytics source counters, name → count:
+
+```json
+{ "data": { "twitter": 42, "github": 17 } }
 ```
 
 ### Protected
