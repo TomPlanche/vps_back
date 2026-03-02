@@ -9,8 +9,8 @@ use std::sync::Arc;
 use tower_http::cors::CorsLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use vps_back::{
-    brew, config::Config, data_response, db::init_pool, middlewares, source,
-    static_files::static_files_service, sticker,
+    brew, config::Config, data_response, db::init_pool, github_stats, middlewares, source,
+    static_files::static_files_service, stats, sticker,
 };
 
 #[tokio::main]
@@ -90,14 +90,25 @@ async fn main() {
         .nest_service("/static", static_files_service(&config.static_dir))
         .nest("/secure", api_router)
         .nest("/brew", brew::router())
+        .nest("/stats", stats::router())
         .layer(cors)
         .layer(middlewares::tracing::create_tracing_layer())
+        .layer(axum::Extension(config.static_dir.clone()))
         .with_state(db);
 
     let addr = format!("{}:{}", config.host, config.port);
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
 
     tracing::info!("listening on {}", listener.local_addr().unwrap());
+
+    if let Some(token) = config.github_token.clone() {
+        let static_dir = config.static_dir.clone();
+        tokio::spawn(async move {
+            github_stats::run_periodic_update(token, static_dir).await;
+        });
+    } else {
+        tracing::warn!("GITHUB_TOKEN not set — GitHub stats will not be generated");
+    }
 
     axum::serve(listener, app).await.unwrap();
 }

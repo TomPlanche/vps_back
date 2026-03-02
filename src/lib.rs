@@ -3,11 +3,13 @@ pub mod config;
 pub mod db;
 pub mod entities;
 pub mod error;
+pub mod github_stats;
 pub mod middlewares;
 pub mod pagination;
 pub mod response;
 pub mod source;
 pub mod static_files;
+pub mod stats;
 pub mod sticker;
 
 // Re-export error types for convenience

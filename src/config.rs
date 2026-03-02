@@ -9,6 +9,7 @@ pub struct Config {
     pub allowed_origins: Vec<String>,
     pub rust_log: String,
     pub static_dir: String,
+    pub github_token: Option<String>,
 }
 
 impl Config {
@@ -40,6 +41,8 @@ impl Config {
 
         let static_dir = env::var("STATIC_DIR").unwrap_or_else(|_| "static".to_string());
 
+        let github_token = env::var("GITHUB_TOKEN").ok();
+
         Ok(Self {
             host,
             port,
@@ -47,6 +50,7 @@ impl Config {
             allowed_origins,
             rust_log,
             static_dir,
+            github_token,
         })
     }
 }
