@@ -21,6 +21,34 @@ use crate::{
     source::models::SourceRequest,
 };
 
+/// Handles GET requests for source statistics (flat map, no pagination).
+///
+/// # Returns
+/// JSON object mapping each source name to its count.
+///
+/// # Errors
+/// Returns 500 on database failure.
+pub async fn get_source_stats(
+    State(db): State<DatabaseConnection>,
+) -> ApiResult<Json<serde_json::Value>> {
+    use serde_json::json;
+
+    info!("GET `/stats/sources` endpoint called");
+
+    let rows = Sources::find()
+        .order_by_asc(sources::Column::Name)
+        .all(&db)
+        .await
+        .context("Failed to fetch sources")?;
+
+    let mut map = serde_json::Map::new();
+    for row in rows {
+        map.insert(row.name, json!(row.count));
+    }
+
+    Ok(data_response(serde_json::Value::Object(map)))
+}
+
 /// Handles GET requests to the sources path ("/sources").
 /// Fetches all sources and their counts from the database with pagination.
 ///

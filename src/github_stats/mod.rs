@@ -1,4 +1,5 @@
 mod fetcher;
+pub mod handlers;
 mod models;
 
 use std::time::Duration;
