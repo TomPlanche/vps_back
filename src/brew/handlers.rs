@@ -145,7 +145,12 @@ pub async fn get_brew_stats(
         *entry.versions.entry(row.version.clone()).or_insert(0) += count;
     }
 
+    let combined_total: i64 = stats.values().map(|s| s.total).sum();
+
     let mut result = serde_json::Map::new();
+
+    result.insert("combined_downloads".to_string(), json!(combined_total));
+    result.insert("combined_installs".to_string(), json!(combined_total));
 
     for (project_name, project_stats) in stats {
         let mut obj = serde_json::Map::new();
